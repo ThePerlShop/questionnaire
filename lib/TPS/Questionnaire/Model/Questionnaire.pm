@@ -197,7 +197,7 @@ sub save {
     # Even though this object has 'rw' attributes, questionnaires are
     # conceptually write-once.
     if ($self->has_id) {
-        carp 'Save questionnaire which already exists';
+        carp(sprintf('Save questionnaire %d which already exists', $self->id));
         return $self->id;
     }
 
@@ -216,6 +216,43 @@ sub save {
     }
 
     return $self->id;
+}
+
+=head2 publish
+
+Looks to publish an unpublished questionnaire.
+
+Reports an error if questionnaire does not exist or is already published.
+
+  Param    schema
+  Param    questionnaire_id
+  Returns  Questionnaire object on success
+           false on failure
+
+=cut
+
+sub publish {
+    my ($self, $schema, $id) = (shift, @_);
+
+    my $result = $schema
+        ->resultset('Questionnaire')
+        ->search({ questionnaire_id => $id })
+        ->next;
+
+    if (!$result) {
+        carp(sprintf('Questionnaire %d not found, cannot be published', $id));
+        return;
+    }
+
+    if ($result->is_published) {
+        carp(sprintf('Questionnaire %d is already published', $id));
+        return;
+    }
+
+    $result->is_published(1);
+    $result->update();
+
+    return $self->from_db_object($schema, $result);
 }
 
 =head2 summary_list($schema)

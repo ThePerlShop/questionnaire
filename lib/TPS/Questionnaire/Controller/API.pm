@@ -34,21 +34,41 @@ With an ID, posts a response to the questionnaire.
 sub post_questionnaire :Path('questionnaire') POST CaptureArgs(1) Consumes(JSON) {
     my ($self, $c, $id) = (shift, @_);
 
-    if ($id) {
-        my %posted = %{$c->request->body_data};
-        $posted{questionnaire_id} = $id;
-        my $qa = 'TPS::Questionnaire::Model::QuestionnaireAnswer'->from_hashref(\%posted);
-        $qa->save($c->schema);
-        $c->stash->{'status'} = 'ok';
-        $c->stash->{'result'} = $qa->to_hashref;
-        $c->forward('View::JSON');
-    }
-    else {
-        my $q = 'TPS::Questionnaire::Model::Questionnaire'->from_hashref($c->request->body_data);
-        $q->save($c->schema);
+    my $posted_body = $c->request->body_data;
+
+    my $q = $id
+        ? TPS::Questionnaire::Model::QuestionnaireAnswer->from_hashref( { %$posted_body, questionnaire_id => $id } )
+        : TPS::Questionnaire::Model::Questionnaire->from_hashref( $posted_body );
+
+    $q->save($c->schema);
+    $c->stash->{'status'} = 'ok';
+    $c->stash->{'result'} = $q->to_hashref;
+    $c->forward('View::JSON');
+    return 1;
+}
+
+=head2 put_questionnaire
+
+Handles PUTs to /api/questionnaire/{id}.
+
+Currently, simply looks to publish the given questionnaire.
+
+Returns the status of the underlying publish() method.
+
+=cut
+
+sub put_questionnaire :Path('questionnaire') PUT CaptureArgs(1) Consumes(JSON) {
+    my ($self, $c, $id) = (shift, @_);
+
+    if (my $q = TPS::Questionnaire::Model::Questionnaire->publish($c->schema, $id)) {
         $c->stash->{'status'} = 'ok';
         $c->stash->{'result'} = $q->to_hashref;
         $c->forward('View::JSON');
+        return 1;
+    }
+    else {
+        # some kind of feedback
+        return;
     }
 }
 
@@ -83,7 +103,6 @@ sub get_questionnaire :Path('questionnaire') GET CaptureArgs(1) {
 
     $c->forward('View::JSON');
 }
-
 
 __PACKAGE__->meta->make_immutable;
 
