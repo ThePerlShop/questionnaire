@@ -118,4 +118,13 @@ sub publish_unpublished_questionnaire {
         'Second questionnaire displayed'
     );
 
+    # Confirm cannot re-publish.
+    # Underlying carp() goes to STDERR - capture and inspect.
+    my @err;
+    local $SIG{__WARN__} = sub { push @err, $_[0] };
+    eval { request(PUT '/api/questionnaire/2', Content_Type => 'application/json') };
+    like($err[-1], qr/already published/, 'Cannot re-publish published questionnaire');
+
+    eval { request(PUT '/api/questionnaire/2222222222222222222', Content_Type => 'application/json') };
+    like($err[-1], qr/not found, cannot be published/, 'Cannot publish non-existant questionnaire');
 }
