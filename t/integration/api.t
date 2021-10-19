@@ -25,44 +25,106 @@ BEGIN {
 }
 use Catalyst::Test 'TPS::Questionnaire';
 
-is(
-    decode_json(request('/api/questionnaire')->decoded_content),
-    {
-        result => { count => 0, list => [] },
-        status => 'ok',
-    },
-    'GET /api/questionnaire -> ok',
-);
-
-is(
-    request('/api/questionnaire/1')->code,
-    404,
-    'GET /api/questionnaire/1 -> 404',
-);
-
-is(
-    decode_json(request(
-        POST '/api/questionnaire',
-            Content_Type => 'application/json',
-            Content => encode_json({
-                title => 'Sample Questionnaire',
-                is_published => \1,
-                questions => [ 'Foo?', 'Bar?' ],
-            })
-    )->code),
-    200,
-    'POST /api/questionnaire -> ok',
-);
-
-is(
-    decode_json(request('/api/questionnaire')->decoded_content),
-    {
-        result => { count => 1, list => [
-            { id => 1, title => 'Sample Questionnaire' },
-        ] },
-        status => 'ok',
-    },
-    'GET /api/questionnaire -> ok',
-);
+confirm_no_initial_questionnaires();
+post_new_questionnaire();
+publish_unpublished_questionnaire();
 
 done_testing();
+
+sub confirm_no_initial_questionnaires {
+    is(
+        decode_json(request('/api/questionnaire')->decoded_content),
+        {
+            result => { count => 0, list => [] },
+            status => 'ok',
+        },
+        'GET /api/questionnaire -> ok',
+    );
+    
+    # And thus, cannot GET id 1
+    is(
+        request('/api/questionnaire/1')->code,
+        404,
+        'GET /api/questionnaire/1 -> 404',
+    );
+}
+
+
+sub post_new_questionnaire {
+    is(
+        request(
+            POST '/api/questionnaire',
+                Content_Type => 'application/json',
+                Content => encode_json({
+                    title => 'Sample Questionnaire',
+                    is_published => \1,
+                    questions => [ 'Foo?', 'Bar?' ]
+                })
+        )->code,
+        200,
+        'POST /api/questionnaire -> ok',
+    );
+    
+    is(
+        decode_json(request('/api/questionnaire')->decoded_content),
+        {
+            result => { count => 1, list => [
+                { id => 1, title => 'Sample Questionnaire' },
+            ] },
+            status => 'ok',
+        },
+        'GET /api/questionnaire -> ok',
+    );
+}
+
+sub publish_unpublished_questionnaire {
+    is(
+        request(
+            POST '/api/questionnaire',
+            Content_Type => 'application/json',
+            Content => encode_json({
+                title => 'New Questionnaire',
+                is_published => \0,
+                questions => [ 'When?', 'Why?' ]
+            })
+        )->code,
+        200,
+        'POST /api/questionnaire (unpublished) - ok'
+    );
+ 
+    # Cannot see it when unpublished:
+    is(
+        decode_json(request('/api/questionnaire')->decoded_content),
+        {
+            result => { count => 1, list => [
+                { id => 1, title => 'Sample Questionnaire' },
+            ] },
+            status => 'ok',
+        },
+        'Still only one questionnaire displayed'
+    );
+
+    is(
+        request(PUT '/api/questionnaire/2', Content_Type => 'application/json')->code,
+        200,
+        'PUT /api/questionnaire -> ok (published!)'
+    );
+
+    my $r = request('/api/questionnaire');
+
+    is(
+        decode_json(request('/api/questionnaire')->decoded_content)->{result}{count},
+        2,
+        'Second questionnaire displayed'
+    );
+
+    # Confirm cannot re-publish.
+    # Underlying carp() goes to STDERR - capture and inspect.
+    my @err;
+    local $SIG{__WARN__} = sub { push @err, $_[0] };
+    eval { request(PUT '/api/questionnaire/2', Content_Type => 'application/json') };
+    like($err[-1], qr/already published/, 'Cannot re-publish published questionnaire');
+
+    eval { request(PUT '/api/questionnaire/2222222222222222222', Content_Type => 'application/json') };
+    like($err[-1], qr/not found, cannot be published/, 'Cannot publish non-existant questionnaire');
+}
