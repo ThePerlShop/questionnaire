@@ -41,7 +41,7 @@ is(
 );
 
 is(
-    decode_json(request(
+    request(
         POST '/api/questionnaire',
             Content_Type => 'application/json',
             Content => encode_json({
@@ -49,7 +49,7 @@ is(
                 is_published => \1,
                 questions => [ 'Foo?', 'Bar?' ],
             })
-    )->code),
+    )->code,
     200,
     'POST /api/questionnaire -> ok',
 );
