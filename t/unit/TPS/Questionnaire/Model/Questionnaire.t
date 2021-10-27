@@ -244,6 +244,138 @@ tests save => sub {
     ) or diag explain($object);
 };
 
+
+=begin comment
+
+Step 1.
+Manual test plan using POSTMAN:
+  do a GET to know active Q's.
+  do a PUT w/o ID to create new record:
+
+```
+{
+    "title": "Steve Test PUT without id",
+    "is_published": false,
+    "questions": [
+        {
+            "question_type": "text",
+            "question_text": "New question here, does not have an id."
+        }
+    ]
+}
+```
+
+get a 200 status ok
+
+Step 2.
+In Pycharm (or other database tool) verify that the new Q was created. Since we are NOT dealing with
+questions in the PUT, their presence in the submitted data is optional. We could use POST to create a
+new Q (that would include the questions), being sure to set the is_published to 'false'. But, the
+result does not include the QID, so there's no real difference.
+
+Step 3.
+Back to POSTMAN, update the url to include the QID created above.
+  do a PUT w/ID to update the record with:
+
+```
+{
+    "title": "Steve Test PUT with id",
+    "is_published": true,
+}
+```
+
+get a 200 status ok
+
+verify in database that the id_published changes from false to true (0 to 1).
+verify with GET that the Q is listed.
+
+Step 4.
+Back to POSTMAN, send the same data to the same URL as in Step 3.
+
+get a 400 status error
+
+This verifies that the PUT will not update a published Questionnaire.
+end.
+
+=end comment
+
+=cut
+
+## updated: 21 Oct 2021 by SJS
+## comment: first pass at testing the put method. Need to save hash, but then find the QID, not from GET.
+##
+
+tests update => sub {
+    plan(2);
+
+    my $object = $CLASS->from_hashref({
+        title        => 'Steve Test',
+        is_published => 0,
+        questions    => [
+            {
+                question_type => 'text',
+                question_text => 'New Question without id.'
+            }
+        ],
+    });
+
+    require TPS::Questionnaire::Schema;
+    my $schema = TPS::Questionnaire::Schema->connect(
+        sub { make_database('schema.sql') },
+    );
+
+    # Save and reload from database
+    my $id = $object->save($schema);
+    $object = $CLASS->from_id($schema, $id);
+
+    is(
+        $object,
+        object {
+            prop 'isa' => 'TPS::Questionnaire::Model::Questionnaire';
+            call 'title' => string 'Steve Test';
+            call 'is_published' => bool !!0;
+            call 'questions' => array {
+                item object {
+                    prop 'isa' => 'TPS::Questionnaire::Model::Question::Text';
+                    call 'question_text' => 'New Question without id.';
+                };
+
+                end();
+            };
+        },
+            'Correct object loaded from database',
+    ) or diag explain($object);
+
+    # update the saved object
+    #
+    $object->is_published( 1 );
+    my $up_id = $object->update($schema);
+    $object = $CLASS->from_id($schema, $up_id);
+
+    is(
+        $object,
+        object {
+            prop 'isa' => 'TPS::Questionnaire::Model::Questionnaire';
+            call 'title' => string 'Steve Test';
+            call 'is_published' => bool !!1;
+            call 'questions' => array {
+                item object {
+                    prop 'isa' => 'TPS::Questionnaire::Model::Question::Text';
+                    call 'question_text' => 'New Question without id.';
+                };
+
+                end();
+            };
+        },
+        'Updated the object properly',
+    )
+    or diag explain($object);
+};
+
+
+
+
+
 done_testing();
 
 1;
