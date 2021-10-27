@@ -243,6 +243,53 @@ sub summary_list {
 }
 
 
+
+=head2 update($schema)
+
+Based on save, but expects that the ID exists.
+
+Saves the questionnaire (title and is_published) using this object's ID.
+
+Future improvement is to also save the associated questions to the database.
+
+=cut
+
+sub update {
+    my ($self, $schema) = (shift, @_);
+
+    # Even though this object has 'rw' attributes, questionnaires are
+    # conceptually write-once. or not.
+    unless ($self->has_id) {
+        croak 'Updating questionnaire requires that one already exists', $self;
+        return;
+    }
+
+    my $input = {
+        title            => $self->title,
+        is_published     => $self->is_published,
+    };
+
+
+    my $result = $schema
+        ->resultset('Questionnaire')
+        ->search( {questionnaire_id => $self->id} )
+        ->update( $input );
+
+
+    ## updated: 21 Oct 2021 by SJS
+    ## comment: update() works above. need to update() the questions? am I into scope creep, yes. maybe.
+    ##          so the method works for the Questionnaire, and does allow changes to the two fields, and
+    ##          overall, only works for existing Qs. But it does not save/update the list of questions, which
+    ##          really bugs me. But I've run out of development time. bummer.
+    # my $rank = 0;
+    # for my $q (@{$self->questions}) {
+    #     $q->_save($self, ++$rank, @_);
+    # }
+
+    return $self->id;
+}
+
+
 __PACKAGE__->meta->make_immutable;
 
 1;
